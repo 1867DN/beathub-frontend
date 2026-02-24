@@ -4,11 +4,26 @@ import path from 'path'
 import fs from 'fs'
 
 // Serve product images from src/assets/images/products/ under /products/
-// This way images stay in their original location — no copying needed
+// Works in both dev (configureServer) and production build (closeBundle copies to dist/products/)
 function serveProductImages() {
   const imagesRoot = path.resolve(process.cwd(), 'src/assets/images/products')
+
+  function copyDirSync(src, dest) {
+    fs.mkdirSync(dest, { recursive: true })
+    for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+      const srcPath = path.join(src, entry.name)
+      const destPath = path.join(dest, entry.name)
+      if (entry.isDirectory()) {
+        copyDirSync(srcPath, destPath)
+      } else {
+        fs.copyFileSync(srcPath, destPath)
+      }
+    }
+  }
+
   return {
     name: 'serve-product-images',
+    // DEV: serve from src/assets/images/products/
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
         if (req.url && req.url.startsWith('/products/')) {
@@ -25,6 +40,14 @@ function serveProductImages() {
         }
         next()
       })
+    },
+    // PRODUCTION BUILD: copy images to dist/products/
+    closeBundle() {
+      const outDir = path.resolve(process.cwd(), 'dist', 'products')
+      if (fs.existsSync(imagesRoot)) {
+        copyDirSync(imagesRoot, outDir)
+        console.log('✅ Product images copied to dist/products/')
+      }
     }
   }
 }
